@@ -11,17 +11,42 @@ import { formatCurrency } from './utils';
 
 const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
 
+export async function fetchDashboardStats() {
+  try {
+    const [invoiceStats, customerStats] = await Promise.all([
+      sql`
+        SELECT
+          SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END) AS total_paid,
+          SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END) AS total_pending,
+          COUNT(*) AS total_invoices
+        FROM invoices
+      `,
+      sql`SELECT COUNT(*) AS total_customers FROM customers`
+    ]);
+
+    return {
+      totalPaidInvoices: invoiceStats[0]?.total_paid ?? 0,
+      totalPendingInvoices: invoiceStats[0]?.total_pending ?? 0,
+      numberOfInvoices: invoiceStats[0]?.total_invoices ?? 0,
+      numberOfCustomers: customerStats[0]?.total_customers ?? 0,
+    };
+  } catch (e) {
+    console.error('Database Error:', e);
+    throw new Error("Error fetching dashboard stats");
+  }
+}
+
 export async function fetchRevenue() {
   try {
     // Artificially delay a response for demo purposes.
     // Don't do this in production :)
 
-    // console.log('Fetching revenue data...');
-    // await new Promise((resolve) => setTimeout(resolve, 3000));
+    console.log('Fetching revenue data...');
+    await new Promise((resolve) => setTimeout(resolve, 3000));
 
     const data = await sql<Revenue[]>`SELECT * FROM revenue`;
 
-    // console.log('Data fetch completed after 3 seconds.');
+    console.log('Data fetch completed after 3 seconds.');
 
     return data;
   } catch (error) {
@@ -38,6 +63,8 @@ export async function fetchLatestInvoices() {
       JOIN customers ON invoices.customer_id = customers.id
       ORDER BY invoices.date DESC
       LIMIT 5`;
+
+    console.log(data)
 
     const latestInvoices = data.map((invoice) => ({
       ...invoice,
